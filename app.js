@@ -229,14 +229,24 @@ function initFields() {
   fieldsBody.innerHTML = "";
   FIELD_CATEGORIES.forEach((cat) => {
     const group = document.createElement("div");
-    group.className = "field-group";
+    group.className = "field-group collapsed";
     group.dataset.name = cat.name;
 
     const head = document.createElement("div");
     head.className = "field-group-head";
+    const left = document.createElement("span");
+    left.className = "field-group-left";
+    const caret = document.createElement("span");
+    caret.className = "field-group-caret";
+    caret.textContent = "▸";
     const title = document.createElement("span");
     title.className = "field-group-title";
     title.textContent = cat.name;
+    const cnt = document.createElement("span");
+    cnt.className = "field-group-count";
+    cnt.textContent = `${cat.items.length}`;
+    left.append(caret, title, cnt);
+
     const actions = document.createElement("span");
     actions.className = "field-group-actions";
     const selAll = document.createElement("button");
@@ -246,7 +256,13 @@ function initFields() {
     clr.className = "link-btn";
     clr.textContent = "清空";
     actions.append(selAll, clr);
-    head.append(title, actions);
+
+    head.append(left, actions);
+    head.onclick = (e) => {
+      if (e.target.closest(".link-btn")) return; // 点按钮不触发折叠
+      group.classList.toggle("collapsed");
+      caret.textContent = group.classList.contains("collapsed") ? "▸" : "▾";
+    };
 
     const chips = document.createElement("div");
     chips.className = "field-chips";
@@ -292,6 +308,13 @@ function updateFieldCount() {
   fieldCount.textContent = selectedFields.length
     ? `已选 ${selectedFields.length} 项（${selectedFields.length} / ${ALL_FIELDS.length}）`
     : "已选 0 项 · 默认全领域";
+  document.querySelectorAll(".field-group").forEach((group) => {
+    const cnt = group.querySelector(".field-group-count");
+    if (!cnt) return;
+    const tags = group.querySelectorAll(".field-tag");
+    const n = group.querySelectorAll(".field-tag.active").length;
+    cnt.textContent = n ? `${tags.length} · 已选 ${n}` : `${tags.length}`;
+  });
 }
 
 function searchFields() {
@@ -303,7 +326,13 @@ function searchFields() {
       tag.style.display = hit ? "" : "none";
       if (hit) visible++;
     });
-    group.style.display = visible ? "" : "none";
+    const show = visible > 0;
+    group.style.display = show ? "" : "none";
+    if (show && q) { // 搜索时自动展开命中的组
+      group.classList.remove("collapsed");
+      const caret = group.querySelector(".field-group-caret");
+      if (caret) caret.textContent = "▾";
+    }
   });
 }
 

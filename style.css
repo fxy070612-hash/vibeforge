@@ -119,9 +119,13 @@ textarea:focus { outline: none; border-color: var(--indigo); }
   padding: 10px 14px;
   background: #fafbfd;
 }
-.field-group-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; }
+.field-group-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; cursor: pointer; user-select: none; }
+.field-group-left { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.field-group-caret { color: #94a3b8; font-size: 0.7rem; }
 .field-group-title { font-weight: 600; font-size: 0.85rem; color: #334155; white-space: nowrap; }
+.field-group-count { color: #94a3b8; font-size: 0.78rem; }
 .field-group-actions { display: flex; gap: 10px; flex-shrink: 0; }
+.field-group.collapsed .field-chips { display: none; }
 .field-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 
 /* 滑块 */
