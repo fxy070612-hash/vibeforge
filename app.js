@@ -125,6 +125,7 @@ const generateBtn = $("generateBtn");
 const randomBtn = $("randomBtn");
 const outputArea = $("outputArea");
 const resultCard = $("resultCard");
+const apiSetBtn = $("apiSetBtn");
 const chatWrap = $("chatWrap");
 const chatMsgs = $("chatMsgs");
 const chatInput = $("chatInput");
@@ -1182,3 +1183,12 @@ chatInput.addEventListener("keydown", (e) => {
 });
 chatCloseBtn.onclick = () => { chatWrap.hidden = true; };
 historySearch.addEventListener("input", renderHistory);
+apiSetBtn.onclick = () => {
+  const cur = localStorage.getItem("vibeforge_api_url") || CONFIG.apiUrl;
+  const input = prompt("API 地址（填你的 Cloudflare Worker 地址；留空恢复默认）：", cur);
+  if (input === null) return;
+  if (input.trim() === "") localStorage.removeItem("vibeforge_api_url");
+  else localStorage.setItem("vibeforge_api_url", input.trim());
+  showToast("✅ 已保存，即将刷新");
+  setTimeout(() => location.reload(), 600);
+};
