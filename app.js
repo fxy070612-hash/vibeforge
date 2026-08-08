@@ -31,18 +31,23 @@ const SYSTEM_PROMPT = `你是一位疯狂的 Vibe Coding 导师。用户会提�
     {"name": "核心功能名", "detail": "该功能独特的细节：做到什么效果、用户会有什么体验"}
   ],
   "workflow": [
-    {"step": 1, "title": "环境搭建", "content": "…"},
-    {"step": 2, "title": "PRD 撰写", "content": "…"},
-    {"step": 3, "title": "原型构建", "content": "…"},
-    {"step": 4, "title": "核心功能迭代", "content": "…"},
-    {"step": 5, "title": "调试优化", "content": "…"},
-    {"step": 6, "title": "部署上线", "content": "…"}
+    {"step": 1, "title": "环境搭建", "content": "…", "skill": "技能关键词（如 React Hooks）", "github": "真实开源地址或 \"\""},
+    {"step": 2, "title": "PRD 撰写", "content": "…", "skill": "…", "github": "…"},
+    {"step": 3, "title": "原型构建", "content": "…", "skill": "…", "github": "…"},
+    {"step": 4, "title": "核心功能迭代", "content": "…", "skill": "…", "github": "…"},
+    {"step": 5, "title": "调试优化", "content": "…", "skill": "…", "github": "…"},
+    {"step": 6, "title": "部署上线", "content": "…", "skill": "…", "github": "…"}
+  ],
+  "similar_projects": [
+    {"name": "相似开源项目名", "url": "https://github.com/…", "fit": 85, "note": "像在哪/可借鉴什么（一句话）"}
   ]
 }
 3. features 给 3-5 个，每个都要有一个具体、好玩的细节（不是"支持上传""响应式布局"这种废话）。
 4. workflow 恰好 6 步，顺序固定：环境搭建、PRD 撰写、原型构建、核心功能迭代、调试优化、部署上线。
    每步 content 必须具体到能直接照做：用什么工具、敲什么命令、建什么文件、怎么用 AI 写这段、做完怎么验收。每步 60-150 字。
-5. difficulty_label 与难度匹配：1-3 入门，4-6 中等，7-8 进阶，9-10 困难（越难功能越复杂、技术越深）。`;
+5. difficulty_label 与难度匹配：1-3 入门，4-6 中等，7-8 进阶，9-10 困难（越难功能越复杂、技术越深）。
+6. workflow 每一步附 1 个推荐 skill（技能关键词，如 "React Hooks"）和 1 个 github 开源地址。github 只给确定真实存在、广为人知的仓库（官方文档/常用库/知名模板），不确定就写空字符串 ""，严禁编造不存在的链接。
+7. similar_projects 列 2-4 个【真实存在】的相似开源项目（给 GitHub 地址），fit 是 0-100 的拟合度（越高越像这个想法），note 一句话说明像在哪、能借鉴什么。拿不准真实性的项目不要列，严禁编造不存在的仓库。`;
 
 const ANALYSIS_PROMPT = `你是产品创新顾问。用户给出一个项目，请判断市场上是否已有类似产品，并从 5 个维度打分（每个 1-10 分）：
 novelty 独特性、demand 市场需求、feasibility 技术可行性、competition 替代品稀缺度、impact 潜在影响力。
@@ -420,25 +425,69 @@ function normalizeResult(text) {
     step: s.step || i + 1,
     title: s.title || `步骤 ${i + 1}`,
     content: s.content || "",
+    skill: (s && s.skill) || "",
+    github: toGithubUrl(s && s.github),
   }));
+  if (!Array.isArray(r.similar_projects)) r.similar_projects = [];
+  r.similar_projects = r.similar_projects.map((p) => ({
+    name: (p && p.name) || "",
+    url: toGithubUrl(p && p.url),
+    fit: Math.max(0, Math.min(100, Number((p && p.fit)) || 0)),
+    note: (p && p.note) || "",
+  })).filter((p) => p.name);
   return r;
+}
+
+/* 把「facebook/react」或完整 URL 归一成安全的 github 链接；不合法返回空 */
+function toGithubUrl(u) {
+  const s = String(u || "").trim();
+  if (!s) return "";
+  if (/^https?:\/\//i.test(s)) {
+    return /^https?:\/\/[^\s]+$/i.test(s) && s.length < 300 ? s : "";
+  }
+  // 裸仓库名必须符合 owner/repo（合法字符），否则丢弃
+  return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(s) ? `https://github.com/${s}` : "";
 }
 
 /* ---------- 渲染结果 ---------- */
 function renderResult(data) {
   const wf = (data.workflow || [])
-    .map((s) => `
+    .map((s) => {
+      const tags = [];
+      if (s.skill) tags.push(`<span class="step-tag">🛠 ${esc(s.skill)}</span>`);
+      if (s.github) tags.push(`<span class="step-tag step-tag-link">🔗 <a href="${esc(s.github)}" target="_blank" rel="noopener nofollow">${esc(s.github.replace(/^https?:\/\//i, ""))}</a></span>`);
+      const tagRow = tags.length ? `<div class="step-tags">${tags.join("")}</div>` : "";
+      return `
       <div class="workflow-step">
         <div class="step-num">${esc(s.step)}</div>
         <div class="step-body">
           <div class="step-title">${esc(s.title)}</div>
           <div class="step-content">${esc(s.content)}</div>
+          ${tagRow}
         </div>
-      </div>`)
+      </div>`;
+    })
     .join("");
 
   const hookHtml = data.hook
     ? `<div class="hook-box">💡 <b>记忆点：</b>${esc(data.hook)}</div>`
+    : "";
+  const simHtml = data.similar_projects && data.similar_projects.length
+    ? `
+      <div class="workflow-title">🔎 相似开源项目（拟合度）</div>
+      <div class="sim-list">
+        ${data.similar_projects.map((p) => `
+          <div class="sim-item">
+            <div class="sim-head">
+              ${p.url
+                ? `<a href="${esc(p.url)}" target="_blank" rel="noopener nofollow">${esc(p.name)}</a>`
+                : `<span>${esc(p.name)}</span>`}
+              <span class="sim-fit">${p.fit}%</span>
+            </div>
+            <div class="sim-bar"><div class="sim-fill" style="width:${p.fit}%"></div></div>
+            ${p.note ? `<div class="sim-note">${esc(p.note)}</div>` : ""}
+          </div>`).join("")}
+      </div>`
     : "";
   const featHtml = data.features.length
     ? `
@@ -465,6 +514,7 @@ function renderResult(data) {
     ${hookHtml}
     <p class="project-desc">${esc(data.description)}</p>
     ${featHtml}
+    ${simHtml}
     <div class="workflow-title">📋 Vibe Coding 工作流</div>
     <div class="workflow-box">${wf}</div>
     <div class="result-actions">
@@ -592,7 +642,15 @@ function renderHistory() {
 /* ---------- 复制 / 导出 ---------- */
 function buildMarkdown(p) {
   const feat = (p.features || []).map((f) => `- **${f.name}**：${f.detail}`).join("\n");
-  const wf = (p.workflow || []).map((s) => `${s.step}. **${s.title}** — ${s.content}`).join("\n");
+  const wf = (p.workflow || []).map((s) => {
+    let line = `${s.step}. **${s.title}** — ${s.content}`;
+    if (s.skill) line += `\n    🛠 技能：${s.skill}`;
+    if (s.github) line += `\n    🔗 GitHub：${s.github}`;
+    return line;
+  }).join("\n");
+  const sim = (p.similar_projects || [])
+    .map((s) => `- **${s.name}** ${s.url ? `(${s.url})` : ""} — 拟合度 ${s.fit}%${s.note ? `：${s.note}` : ""}`)
+    .join("\n");
   return `# ${p.project_name}
 
 ${p.hook ? `> 💡 **记忆点：** ${p.hook}\n` : ""}> ${p.description}
@@ -600,7 +658,7 @@ ${p.hook ? `> 💡 **记忆点：** ${p.hook}\n` : ""}> ${p.description}
 **技术栈：** ${p.tech_stack}
 **难度：** ${p.difficulty_label}
 
-${feat ? `## ⚡ 核心亮点\n${feat}\n` : ""}## Vibe Coding 工作流
+${feat ? `## ⚡ 核心亮点\n${feat}\n` : ""}${sim ? `## 🔎 相似开源项目\n${sim}\n` : ""}## Vibe Coding 工作流
 ${wf}`;
 }
 
@@ -650,7 +708,7 @@ ${JSON.stringify({
 用户的每句话都是针对这个方案的修改要求或追问。
 
 规则：
-1. 先简短说改动思路（1-2 句）；【每次修改方案】都用 markdown 代码块 \`\`\`json … \`\`\` 输出一份【完整更新后】的项目 JSON，结构与上面完全一致；workflow 恰好 6 步（环境搭建、PRD 撰写、原型构建、核心功能迭代、调试优化、部署上线）。
+1. 先简短说改动思路（1-2 句）；【每次修改方案】都用 markdown 代码块 \`\`\`json … \`\`\` 输出一份【完整更新后】的项目 JSON，结构与上面完全一致；workflow 恰好 6 步（环境搭建、PRD 撰写、原型构建、核心功能迭代、调试优化、部署上线），每步含 skill（技能关键词）和 github（真实存在的开源地址，不确定写 ""，严禁编造）；顶层含 similar_projects（2-4 个真实相似开源项目 + fit 拟合度 0-100 + note，严禁编造）。
 2. 如果只是回答提问/闲聊，不需要输出 JSON，正常回答即可。
 3. JSON 必须是完整版（不是只给改动部分），方便前端直接替换。`;
 }

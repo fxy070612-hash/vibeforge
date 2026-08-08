@@ -215,6 +215,21 @@ input[type="range"] {
 .step-body { min-width: 0; }
 .step-title { font-weight: 600; font-size: 0.95rem; }
 .step-content { color: #475569; font-size: 0.88rem; white-space: pre-line; }
+.step-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.step-tag { font-size: 0.76rem; background: #eef2ff; color: #4338ca; border-radius: 40px; padding: 2px 10px; }
+.step-tag-link a { color: #4338ca; text-decoration: none; }
+.step-tag-link a:hover { text-decoration: underline; }
+
+/* 相似开源项目 */
+.sim-list { display: flex; flex-direction: column; gap: 10px; margin: 12px 0 16px; }
+.sim-item { background: #fafbfd; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.sim-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.sim-head a { font-weight: 600; color: #4338ca; text-decoration: none; font-size: 0.9rem; }
+.sim-head a:hover { text-decoration: underline; }
+.sim-fit { font-weight: 700; color: var(--indigo); font-size: 0.85rem; }
+.sim-bar { background: #e2e8f0; border-radius: 40px; height: 7px; overflow: hidden; margin-top: 7px; }
+.sim-fill { background: linear-gradient(90deg, var(--indigo), var(--violet)); height: 100%; border-radius: 40px; }
+.sim-note { color: #64748b; font-size: 0.8rem; margin-top: 6px; }
 
 .result-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
 .btn-sm { padding: 8px 18px; font-size: 0.85rem; }
