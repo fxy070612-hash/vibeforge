@@ -62,6 +62,7 @@ novelty 独特性、demand 市场需求、feasibility 技术可行性、competit
 /* ---------- 领域 & 常量 ---------- */
 /* 领域数据在 fields.js：FIELD_CATEGORIES（15 类 × 120 个）/ ALL_FIELDS */
 const LEVEL_LABEL = ["", "入门", "入门", "入门", "中等", "中等", "中等", "进阶", "进阶", "困难", "困难"];
+const WILD_LABEL = ["", "稳如老狗", "稳妥", "务实", "小惊喜", "适中", "有点野", "放飞", "很野", "超野", "彻底放飞"];
 const SCORE_MAP = [
   ["novelty", "独特性"],
   ["demand", "市场需求"],
@@ -80,6 +81,8 @@ const clearFieldsBtn = $("clearFieldsBtn");
 const ideaInput = $("ideaInput");
 const difficultySlider = $("difficultySlider");
 const difficultyDisplay = $("difficultyDisplay");
+const wildnessSlider = $("wildnessSlider");
+const wildnessDisplay = $("wildnessDisplay");
 const generateBtn = $("generateBtn");
 const randomBtn = $("randomBtn");
 const outputArea = $("outputArea");
@@ -134,17 +137,27 @@ function extractDelta(obj) {
 
 /* 从文本里抠出合法 JSON（容忍 markdown 代码块/前后缀） */
 function parseJsonFromText(text) {
-  const m = String(text).match(/\{[\s\S]*\}/);
+  let t = String(text).trim();
+  // 剥离 markdown 代码块围栏（```json ... ```）
+  t = t.replace(/```(?:json)?\s*/gi, "").replace(/```/g, "").trim();
+  const m = t.match(/\{[\s\S]*\}/);
   if (m) {
     try { return JSON.parse(m[0]); } catch (e) { /* 继续尝试整段 */ }
   }
-  try { return JSON.parse(text); } catch (e) {}
-  throw new Error("AI 返回的内容不是合法 JSON，请重试或降低难度");
+  try { return JSON.parse(t); } catch (e) {}
+  throw new Error("AI 返回的内容不是合法 JSON，请重试或调低野度");
 }
 
 /* ---------- API 调用（支持流式 / 非流式） ---------- */
 async function callChat(messages, { temperature = CONFIG.temperature, stream = false, onDelta = null } = {}) {
-  const body = { model: CONFIG.model, messages, temperature, max_tokens: CONFIG.maxTokens, stream };
+  const body = {
+    model: CONFIG.model,
+    messages,
+    temperature,
+    max_tokens: CONFIG.maxTokens,
+    stream,
+    response_format: { type: "json_object" }, // 强制合法 JSON，杜绝模型在字符串里塞换行
+  };
 
   if (stream) {
     const resp = await fetch(CONFIG.apiUrl, {
@@ -288,6 +301,24 @@ function updateDifficulty() {
   difficultyDisplay.textContent = `Lv.${v} · ${LEVEL_LABEL[v]}`;
 }
 
+function updateWildness() {
+  const v = parseInt(wildnessSlider.value, 10);
+  wildnessDisplay.textContent = `Lv.${v} · ${WILD_LABEL[v]}`;
+}
+
+/* 野度(1-10) → temperature：0.2（稳）→ 1.15（放飞，但保持可读） */
+function wildToTemp(w) {
+  const v = Math.max(1, Math.min(10, w));
+  return Math.round((0.2 + ((v - 1) / 9) * 0.95) * 100) / 100;
+}
+
+/* 野度 → 给 AI 的动态创作指令（高野度也强制"逻辑自洽"，防语无伦次） */
+function wildHint(w) {
+  if (w <= 3) return `野度=${w}：求稳！推荐靠谱、成熟、马上能落地的项目，中规中矩也行，关键是实用。`;
+  if (w <= 7) return `野度=${w}：适中！推荐有记忆点、好玩、带点脑洞的项目，别太离谱。`;
+  return `野度=${w}：很野！允许大胆脑洞、极客梗、反常识设定、冒犯性幽默，但必须逻辑自洽、让人看得懂、2-3 天能做出来。宁可怪得有道理，不要乱。`;
+}
+
 /* 示例快捷填充 */
 document.querySelectorAll(".qs-chip").forEach((chip) => {
   chip.onclick = () => {
@@ -301,6 +332,8 @@ async function generateProject() {
   const idea = ideaInput.value.trim() || "没有具体想法，请推荐一个当下热门、好玩又好上手的 Vibe Coding 项目";
   const fields = selectedFields.length ? selectedFields.join("、") : "全领域";
   const level = parseInt(difficultySlider.value, 10);
+  const wild = parseInt(wildnessSlider.value, 10);
+  const temperature = wildToTemp(wild);
 
   setBusy(true);
   outputArea.hidden = false;
@@ -309,16 +342,16 @@ async function generateProject() {
 
   const messages = [
     { role: "system", content: SYSTEM_PROMPT },
-    { role: "user", content: `想法：${idea}\n领域：${fields}\n难度：${level}/10` },
+    { role: "user", content: `想法：${idea}\n领域：${fields}\n难度：${level}/10\n${wildHint(wild)}` },
   ];
 
   try {
     let text;
     if (CONFIG.stream) {
-      text = await callChat(messages, { stream: true, onDelta: (d) => showStream((streamText += d)) });
+      text = await callChat(messages, { temperature, stream: true, onDelta: (d) => showStream((streamText += d)) });
     } else {
       showStreamHint();
-      text = await callChat(messages, { stream: false });
+      text = await callChat(messages, { temperature, stream: false });
     }
     const result = normalizeResult(text);
     currentProject = result;
@@ -602,6 +635,9 @@ function randomize() {
   const lv = Math.floor(Math.random() * 10) + 1;
   difficultySlider.value = lv;
   updateDifficulty();
+  const wv = Math.floor(Math.random() * 10) + 1;
+  wildnessSlider.value = wv;
+  updateWildness();
 }
 
 /* ---------- 按钮状态 ---------- */
@@ -615,9 +651,11 @@ function setBusy(busy) {
 /* ---------- 启动 ---------- */
 initFields();
 updateDifficulty();
+updateWildness();
 renderHistory();
 
 difficultySlider.oninput = updateDifficulty;
+wildnessSlider.oninput = updateWildness;
 generateBtn.onclick = generateProject;
 randomBtn.onclick = () => { randomize(); generateProject(); };
 clearHistoryBtn.onclick = () => {
