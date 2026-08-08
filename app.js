@@ -64,6 +64,21 @@ novelty 独特性、demand 市场需求、feasibility 技术可行性、competit
 3. total_score = 5 个维度分数之和（满分 50）。
 4. existing_projects 列 1-3 个真实存在的类似产品；若确实没有，返回空数组 []。`;
 
+const DETAIL_PROMPT = `你是资深的产品与工程方案撰写人。下面是一个待落地的 Vibe Coding 项目方案。
+请为它写一篇【约 2000 字】的详细项目方案介绍。纯文本，用空行分段，用「一、二、三…」分章，不要用 markdown 标题符号（不要 #、**），不要 JSON。
+
+内容必须覆盖：
+一、项目背景与灵感：为什么做、解决什么问题、灵感从哪来
+二、产品定位与目标用户：给谁用、什么场景、什么心情下会用
+三、核心功能详解：把每个功能展开说清楚（怎么操作、用户会有什么体验）
+四、技术实现思路：技术栈、核心模块怎么划分、数据存哪、用哪些关键 API
+五、关键难点与解决方案：开发中会卡住的点 + 具体怎么破
+六、用户体验与设计细节：交互、视觉、值得记住的小彩蛋
+七、亮点与差异化：跟别人的方案哪里不一样、为什么可能火
+八、迭代方向：上线后第一版要改进什么
+
+写满约 2000 字，有血有肉、具体可执行，别写空话。`;
+
 /* ---------- 领域 & 常量 ---------- */
 /* 领域数据在 fields.js：FIELD_CATEGORIES（15 类 × 120 个）/ ALL_FIELDS */
 const LEVEL_LABEL = ["", "入门", "入门", "入门", "中等", "中等", "中等", "进阶", "进阶", "困难", "困难"];
@@ -159,12 +174,12 @@ function parseJsonFromText(text) {
 }
 
 /* ---------- API 调用（支持流式 / 非流式） ---------- */
-async function callChat(messages, { temperature = CONFIG.temperature, stream = false, onDelta = null, json = true } = {}) {
+async function callChat(messages, { temperature = CONFIG.temperature, stream = false, onDelta = null, json = true, maxTokens = CONFIG.maxTokens } = {}) {
   const body = {
     model: CONFIG.model,
     messages,
     temperature,
-    max_tokens: CONFIG.maxTokens,
+    max_tokens: maxTokens,
     stream,
   };
   // 需要结构化输出时强制 JSON 模式；聊天/追问是自由文本，关掉
@@ -444,6 +459,7 @@ function normalizeResult(text) {
   r.tech_stack = r.tech_stack || "";
   r.difficulty_label = r.difficulty_label || "";
   r.hook = r.hook || "";
+  r.detail = ""; // 详细方案按需生成，新方案一律清空
   if (!Array.isArray(r.features)) r.features = [];
   r.features = r.features.map((f) => ({
     name: (f && f.name) || "",
@@ -480,6 +496,7 @@ function toGithubUrl(u) {
 
 /* ---------- 渲染结果 ---------- */
 function renderResult(data) {
+  detailBusy = false;
   const wf = (data.workflow || [])
     .map((s) => {
       const tags = [];
@@ -542,6 +559,9 @@ function renderResult(data) {
     </div>
     ${hookHtml}
     <p class="project-desc">${esc(data.description)}</p>
+    ${data.detail
+      ? `<div class="detail-box" id="detailBox">${esc(data.detail)}</div>`
+      : `<div class="detail-box" id="detailBox" hidden></div>`}
     ${featHtml}
     ${simHtml}
     <div class="workflow-title">📋 Vibe Coding 工作流</div>
@@ -551,6 +571,7 @@ function renderResult(data) {
       <button class="btn btn-sm btn-ghost" id="copyBtn">📋 复制工作流</button>
       <button class="btn btn-sm btn-ghost" id="exportBtn">⬇️ 导出 Markdown</button>
       <button class="btn btn-sm btn-ghost no-print" id="printBtn">🖨 打印 / PDF</button>
+      <button class="btn btn-sm btn-ghost no-print" id="detailBtn">${data.detail ? "📕 收起详细方案" : "📖 详细方案"}</button>
       <button class="btn btn-sm btn-ghost no-print" id="chatBtn">💬 进一步打磨</button>
     </div>
     <div class="analysis-wrap" id="analysisWrap" hidden></div>`;
@@ -559,6 +580,7 @@ function renderResult(data) {
   $("copyBtn").onclick = () => copyMarkdown(data);
   $("exportBtn").onclick = () => exportMarkdown(data);
   $("printBtn").onclick = () => window.print();
+  $("detailBtn").onclick = () => toggleDetail();
   $("chatBtn").onclick = () => openChat();
 }
 
@@ -721,6 +743,7 @@ function exportMarkdown(p) {
 
 /* ---------- 打磨对话 ---------- */
 let chatState = null; // 当前项目的对话上下文（重置时机：重新生成/采用新方案）
+let detailBusy = false; // 详细方案生成中标志
 
 function buildChatSystem(project) {
   return `你是 VibeForge 的「方案打磨助手」。这是当前已生成的项目方案 JSON：
@@ -871,6 +894,63 @@ function tryApplyPlan(plan, keepChat = false) {
     return true;
   } catch (e) {
     return false;
+  }
+}
+
+/* ---------- 详细方案（约 2000 字，按需生成 + 缓存） ---------- */
+function planForPrompt(p) {
+  // 供提示词使用的精简项目数据（不含 detail）
+  return {
+    project_name: p.project_name,
+    hook: p.hook,
+    description: p.description,
+    tech_stack: p.tech_stack,
+    difficulty_label: p.difficulty_label,
+    features: p.features,
+    workflow: p.workflow,
+    similar_projects: p.similar_projects,
+  };
+}
+
+async function toggleDetail() {
+  const btn = $("detailBtn");
+  const box = $("detailBox");
+  if (!btn || !box || detailBusy || !currentProject) return;
+
+  // 已有详细内容 → 直接切换显隐
+  if (currentProject.detail) {
+    box.hidden = !box.hidden;
+    btn.textContent = box.hidden ? "📖 详细方案" : "📕 收起详细方案";
+    if (!box.hidden) box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    return;
+  }
+
+  // 首次：流式生成
+  detailBusy = true;
+  btn.disabled = true;
+  btn.textContent = "⏳ 正在撰写（约 2000 字）…";
+  box.hidden = false;
+  box.textContent = "";
+  box.classList.add("chat-typing");
+
+  try {
+    const text = await callChat(
+      [
+        { role: "system", content: DETAIL_PROMPT },
+        { role: "user", content: `以下是已生成的项目方案：\n${JSON.stringify(planForPrompt(currentProject))}` },
+      ],
+      { temperature: 0.7, json: false, stream: true, maxTokens: 4000, onDelta: (d) => { box.textContent += d; box.scrollTop = box.scrollHeight; } }
+    );
+    currentProject.detail = text;
+    box.classList.remove("chat-typing");
+    btn.textContent = "📕 收起详细方案";
+    btn.disabled = false;
+  } catch (e) {
+    box.innerHTML = `<div class="error-msg">详细方案生成失败：${esc(e.message)}</div>`;
+    btn.textContent = "📖 详细方案";
+    btn.disabled = false;
+  } finally {
+    detailBusy = false;
   }
 }
 
