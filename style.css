@@ -61,6 +61,18 @@ textarea {
   transition: border-color 0.15s;
 }
 textarea:focus { outline: none; border-color: var(--indigo); }
+.mic-btn {
+  border: 1px solid var(--line);
+  background: #fff;
+  width: 34px; height: 34px;
+  border-radius: 40px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all 0.12s;
+}
+.mic-btn:hover { border-color: var(--indigo); background: #f5f6ff; }
+.mic-btn.recording { background: #fee2e2; border-color: #f87171; animation: pulse 1s infinite; }
+@keyframes pulse { 50% { opacity: 0.55; } }
 
 .quick-samples { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
 .qs-label { font-size: 0.8rem; color: var(--muted); }
@@ -183,6 +195,19 @@ input[type="range"] {
 
 .workflow-title { font-weight: 700; margin-bottom: 8px; }
 
+/* 候选方向 */
+.cand-title { font-weight: 700; margin-bottom: 12px; font-size: 1.05rem; }
+.cand-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.cand-card { border: 1px solid var(--line); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 8px; background: #fff; transition: all 0.12s; }
+.cand-card:hover { border-color: var(--indigo); box-shadow: 0 4px 14px rgba(99, 102, 241, 0.1); }
+.cand-badge { font-size: 0.72rem; color: var(--violet); font-weight: 700; }
+.cand-name { font-weight: 700; font-size: 1.05rem; }
+.cand-hook { color: #7c3aed; font-size: 0.85rem; background: #faf5ff; border-radius: 8px; padding: 6px 8px; }
+.cand-desc { color: #475569; font-size: 0.85rem; }
+.cand-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.cand-go { margin-top: auto; align-self: flex-start; }
+.cand-tip { color: #94a3b8; font-size: 0.8rem; margin-top: 12px; text-align: center; }
+
 /* 详细方案 */
 .detail-box {
   margin: 14px 0 4px;
@@ -304,7 +329,17 @@ input[type="range"] {
 }
 .history-item:hover { border-color: var(--indigo); background: #f5f6ff; }
 .history-item .h-name { font-weight: 600; font-size: 0.92rem; }
+.history-item .h-time { color: #94a3b8; font-size: 0.75rem; font-weight: 400; margin-left: 6px; }
 .history-item .h-desc { color: var(--muted); font-size: 0.82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.history-item { position: relative; }
+.h-del {
+  position: absolute; right: 8px; top: 8px;
+  width: 22px; height: 22px; line-height: 1;
+  border: none; background: #f1f5f9; color: #94a3b8;
+  border-radius: 40px; cursor: pointer; font-size: 0.72rem;
+}
+.h-del:hover { background: #fee2e2; color: #b91c1c; }
+.history-item:hover .h-del { display: block; }
 
 /* Toast */
 .toast {

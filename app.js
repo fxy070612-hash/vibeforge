@@ -62,7 +62,24 @@ novelty 独特性、demand 市场需求、feasibility 技术可行性、competit
   "comment": "80 字内的犀利评语"
 }
 3. total_score = 5 个维度分数之和（满分 50）。
-4. existing_projects 列 1-3 个真实存在的类似产品；若确实没有，返回空数组 []。`;
+4. existing_projects 列 1-3 个真实存在的类似产品；若确实没有，返回空数组 []。
+5. 如果用户提供了「相似开源项目」清单，comment 必须点名其中 1-2 个做对比，明确说出这个项目与它们的不同点、优势或风险。`;
+
+const CANDIDATES_PROMPT = `你是 Vibe Coding 创意策划。基于用户提供：想法、领域、难度（1-10）、野度（1-10），一次性给出 3 个【截然不同】的项目候选方向。
+
+要求：
+1. 3 个方向差异越大越好（比如：一个游戏化、一个工具型、一个社交/内容向），不要都是同一种类型。
+2. 每个候选都要有记忆点 hook、不要烂大街（禁待办清单/番茄钟/记账本/博客/天气）。
+3. 都要 2-3 天能用 Vibe Coding 落地（纯前端 + 免费 API 优先）。
+
+只返回一个 JSON 对象（不要解释、不要 markdown 代码块）：
+{
+  "candidates": [
+    {"name": "方向名", "hook": "一句话记忆点", "desc": "一句话简介", "difficulty_label": "入门/简单/中等/进阶/困难", "tech_stack": "技术栈"},
+    {"name": "…", "hook": "…", "desc": "…", "difficulty_label": "…", "tech_stack": "…"},
+    {"name": "…", "hook": "…", "desc": "…", "difficulty_label": "…", "tech_stack": "…"}
+  ]
+}`;
 
 const DETAIL_PROMPT = `你是资深的产品与工程方案撰写人。下面是一个待落地的 Vibe Coding 项目方案。
 请为它写一篇【约 2000 字】的详细项目方案介绍。纯文本，用空行分段，用「一、二、三…」分章，不要用 markdown 标题符号（不要 #、**），不要 JSON。
@@ -99,6 +116,7 @@ const fieldSearch = $("fieldSearch");
 const fieldCount = $("fieldCount");
 const clearFieldsBtn = $("clearFieldsBtn");
 const ideaInput = $("ideaInput");
+const micBtn = $("micBtn");
 const difficultySlider = $("difficultySlider");
 const difficultyDisplay = $("difficultyDisplay");
 const wildnessSlider = $("wildnessSlider");
@@ -114,6 +132,7 @@ const chatSendBtn = $("chatSendBtn");
 const chatCloseBtn = $("chatCloseBtn");
 const historyCard = $("historyCard");
 const historyList = $("historyList");
+const historySearch = $("historySearch");
 const clearHistoryBtn = $("clearHistoryBtn");
 const toast = $("toast");
 
@@ -383,20 +402,24 @@ document.querySelectorAll(".qs-chip").forEach((chip) => {
 });
 
 /* ---------- 生成推荐 ---------- */
+let lastWild = 5; // 记录最近一次野度，供"深入展开"沿用
+
 async function generateProject() {
   const idea = ideaInput.value.trim() || "没有具体想法，请推荐一个当下热门、好玩又好上手的 Vibe Coding 项目";
   const fields = selectedFields.length ? selectedFields.join("、") : "全领域";
   const level = parseInt(difficultySlider.value, 10);
   const wild = parseInt(wildnessSlider.value, 10);
+  lastWild = wild;
   const temperature = wildToTemp(wild);
 
   setBusy(true);
   outputArea.hidden = false;
-  resultCard.innerHTML = loadingHTML();
+  resultCard.innerHTML = loadingHTML("正在为你策划 3 个候选方向…");
+  streamText = "";
   showStream("");
 
   const messages = [
-    { role: "system", content: SYSTEM_PROMPT },
+    { role: "system", content: CANDIDATES_PROMPT },
     { role: "user", content: `想法：${idea}\n领域：${fields}\n难度：${level}/10\n${wildHint(wild)}` },
   ];
 
@@ -408,12 +431,10 @@ async function generateProject() {
       showStreamHint();
       text = await callChat(messages, { temperature, stream: false });
     }
-    const result = normalizeResult(text);
-    currentProject = result;
-    renderResult(result);
-    saveHistory(result);
-    chatWrap.hidden = true; // 新项目 → 收起并重置打磨对话
-    chatState = null;
+    const parsed = parseJsonFromText(text);
+    const cands = Array.isArray(parsed.candidates) ? parsed.candidates : [];
+    if (!cands.length) throw new Error("候选方案为空，请重试");
+    renderCandidates(cands);
     resultCard.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (e) {
     resultCard.innerHTML = `<div class="error-msg">❌ 生成失败：${esc(e.message)}</div>`;
@@ -422,14 +443,73 @@ async function generateProject() {
   }
 }
 
+/* 渲染 3 个候选方向卡片 */
+function renderCandidates(cands) {
+  resultCard.innerHTML = `
+    <div class="cand-title">🎯 3 个候选方向（选一个深入）</div>
+    <div class="cand-grid">
+      ${cands.slice(0, 3).map((c, i) => `
+        <div class="cand-card">
+          <div class="cand-badge">候选 ${i + 1}</div>
+          <div class="cand-name">${esc(c.name || "未命名")}</div>
+          <div class="cand-hook">💡 ${esc(c.hook || "")}</div>
+          <div class="cand-desc">${esc(c.desc || "")}</div>
+          <div class="cand-chips">
+            ${c.tech_stack ? `<span class="chip chip-tech">🛠 ${esc(c.tech_stack)}</span>` : ""}
+            ${c.difficulty_label ? `<span class="chip">📊 ${esc(c.difficulty_label)}</span>` : ""}
+          </div>
+          <button class="btn btn-sm btn-primary cand-go" data-i="${i}">✨ 深入这个方案</button>
+        </div>`).join("")}
+    </div>
+    <p class="cand-tip">都不满意？换个野度再生成，或试试「全随机」。</p>`;
+  resultCard.querySelectorAll(".cand-go").forEach((btn) => {
+    btn.onclick = () => expandCandidate(cands[Number(btn.dataset.i)]);
+  });
+}
+
+/* 把选中的候选方向展开成完整方案 */
+async function expandCandidate(cand) {
+  if (!cand) return;
+  setBusy(true);
+  resultCard.innerHTML = loadingHTML(`正在把「${esc(cand.name || "这个方向")}」展开成完整方案…`);
+  streamText = "";
+  showStream("");
+
+  const messages = [
+    { role: "system", content: SYSTEM_PROMPT },
+    { role: "user", content: `请把下面的候选方向展开成完整项目方案：\n名字：${cand.name}\n记忆点：${cand.hook || ""}\n简介：${cand.desc || ""}\n难度：${cand.difficulty_label || ""}\n技术栈：${cand.tech_stack || ""}\n${wildHint(lastWild)}` },
+  ];
+
+  try {
+    let text;
+    if (CONFIG.stream) {
+      text = await callChat(messages, { temperature: wildToTemp(lastWild), stream: true, onDelta: (d) => showStream((streamText += d)) });
+    } else {
+      showStreamHint();
+      text = await callChat(messages, { temperature: wildToTemp(lastWild), stream: false });
+    }
+    const result = normalizeResult(text);
+    currentProject = result;
+    renderResult(result);
+    saveHistory(result);
+    chatWrap.hidden = true; // 新方案 → 收起并重置打磨对话
+    chatState = null;
+    resultCard.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (e) {
+    resultCard.innerHTML = `<div class="error-msg">❌ 展开失败：${esc(e.message)}</div>`;
+  } finally {
+    setBusy(false);
+  }
+}
+
 let streamText = ""; // 当前流式缓冲（onDelta 里累加）
 
-function loadingHTML() {
+function loadingHTML(msg = "DeepSeek 正在策划项目…") {
   return `
     <div class="loading">
       <div class="spinner"></div>
       <div id="streamBoxWrap">
-        <p>DeepSeek 正在策划项目…</p>
+        <p>${esc(msg)}</p>
         <div class="stream-box" id="streamBox" hidden></div>
       </div>
     </div>`;
@@ -572,6 +652,7 @@ function renderResult(data) {
       <button class="btn btn-sm btn-ghost" id="exportBtn">⬇️ 导出 Markdown</button>
       <button class="btn btn-sm btn-ghost no-print" id="printBtn">🖨 打印 / PDF</button>
       <button class="btn btn-sm btn-ghost no-print" id="detailBtn">${data.detail ? "📕 收起详细方案" : "📖 详细方案"}</button>
+      <button class="btn btn-sm btn-ghost no-print" id="shareBtn">🔗 分享</button>
       <button class="btn btn-sm btn-ghost no-print" id="chatBtn">💬 进一步打磨</button>
     </div>
     <div class="analysis-wrap" id="analysisWrap" hidden></div>`;
@@ -581,6 +662,7 @@ function renderResult(data) {
   $("exportBtn").onclick = () => exportMarkdown(data);
   $("printBtn").onclick = () => window.print();
   $("detailBtn").onclick = () => toggleDetail();
+  $("shareBtn").onclick = () => shareProject();
   $("chatBtn").onclick = () => openChat();
 }
 
@@ -597,7 +679,7 @@ async function analyzeProject(project) {
 
   const messages = [
     { role: "system", content: ANALYSIS_PROMPT },
-    { role: "user", content: `项目名称：${project.project_name}\n记忆点：${project.hook || "无"}\n描述：${project.description}\n技术栈：${project.tech_stack}` },
+    { role: "user", content: `项目名称：${project.project_name}\n记忆点：${project.hook || "无"}\n描述：${project.description}\n技术栈：${project.tech_stack}\n相似开源项目：${(project.similar_projects || []).map((s) => `${s.name}(${s.fit}%)`).join("、") || "无"}` },
   ];
 
   try {
@@ -667,17 +749,33 @@ function saveHistory(project) {
   renderHistory();
 }
 
+function fmtTime(ts) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 function renderHistory() {
   const list = getHistory();
   historyCard.hidden = list.length === 0;
-  historyList.innerHTML = list
+  const q = (historySearch.value || "").trim().toLowerCase();
+  const filtered = q
+    ? list.filter((it) => `${it.project_name} ${it.description || ""}`.toLowerCase().includes(q))
+    : list;
+  historyList.innerHTML = filtered
     .map((it) => `
       <div class="history-item" data-name="${esc(it.project_name)}">
-        <div class="h-name">${esc(it.project_name)}</div>
+        <button class="h-del" title="删除这条">✕</button>
+        <div class="h-name">${esc(it.project_name)} <span class="h-time">${fmtTime(it.savedAt)}</span></div>
         <div class="h-desc">${esc(it.description || "")}</div>
       </div>`)
     .join("");
   historyList.querySelectorAll(".history-item").forEach((el) => {
+    el.querySelector(".h-del").onclick = (e) => {
+      e.stopPropagation();
+      delHistory(el.dataset.name);
+    };
     el.onclick = () => {
       const hit = list.find((it) => it.project_name === el.dataset.name);
       if (hit && hit._full) {
@@ -690,8 +788,15 @@ function renderHistory() {
   });
 }
 
+function delHistory(name) {
+  const list = getHistory().filter((it) => it.project_name !== name);
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+  renderHistory();
+  showToast("🗑 已删除");
+}
+
 /* ---------- 复制 / 导出 ---------- */
-function buildMarkdown(p) {
+function buildMarkdown(p, includeDetail = false) {
   const feat = (p.features || []).map((f) => `- **${f.name}**：${f.detail}`).join("\n");
   const wf = (p.workflow || []).map((s) => {
     let line = `${s.step}. **${s.title}** — ${s.content}`;
@@ -709,7 +814,7 @@ ${p.hook ? `> 💡 **记忆点：** ${p.hook}\n` : ""}> ${p.description}
 **技术栈：** ${p.tech_stack}
 **难度：** ${p.difficulty_label}
 
-${feat ? `## ⚡ 核心亮点\n${feat}\n` : ""}${sim ? `## 🔎 相似开源项目\n${sim}\n` : ""}## Vibe Coding 工作流
+${feat ? `## ⚡ 核心亮点\n${feat}\n` : ""}${sim ? `## 🔎 相似开源项目\n${sim}\n` : ""}${includeDetail && p.detail ? `## 📖 详细方案\n${p.detail}\n\n` : ""}## Vibe Coding 工作流
 ${wf}`;
 }
 
@@ -732,7 +837,7 @@ async function copyMarkdown(p) {
 }
 
 function exportMarkdown(p) {
-  const blob = new Blob([buildMarkdown(p)], { type: "text/markdown;charset=utf-8" });
+  const blob = new Blob([buildMarkdown(p, true)], { type: "text/markdown;charset=utf-8" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `${p.project_name || "vibeforge"}.md`;
@@ -954,6 +1059,78 @@ async function toggleDetail() {
   }
 }
 
+/* ---------- 分享链接（方案编码进 URL hash，点开即恢复） ---------- */
+function shareProject() {
+  if (!currentProject) return;
+  const hash = encodeURIComponent(JSON.stringify(planForPrompt(currentProject)));
+  const url = `${location.origin}${location.pathname}#p=${hash}`;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(() => showToast("✅ 分享链接已复制")).catch(() => fallbackCopy(url));
+  } else {
+    fallbackCopy(url);
+  }
+  location.hash = `p=${hash}`;
+}
+
+function fallbackCopy(t) {
+  const ta = document.createElement("textarea");
+  ta.value = t;
+  ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand("copy");
+  ta.remove();
+  showToast("✅ 分享链接已复制");
+}
+
+function loadShared() {
+  const m = location.hash.match(/#p=([\s\S]*)/);
+  if (!m) return;
+  try {
+    const plan = normalizeResult(JSON.parse(decodeURIComponent(m[1])));
+    currentProject = plan;
+    outputArea.hidden = false;
+    renderResult(plan);
+    resultCard.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (e) {
+    console.warn("分享链接解析失败:", e);
+  }
+}
+
+/* ---------- 语音输入想法（Web Speech API，中文） ---------- */
+function startVoiceInput() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    showToast("⚠️ 浏览器不支持语音输入，请用 Chrome / Edge");
+    return;
+  }
+  if (micBtn.dataset.rec === "1") return; // 已在录音
+  const rec = new SR();
+  rec.lang = "zh-CN";
+  rec.interimResults = false;
+  rec.continuous = false;
+  micBtn.dataset.rec = "1";
+  micBtn.classList.add("recording");
+  micBtn.textContent = "🔴";
+  showToast("🎙 请说话…");
+  rec.onresult = (e) => {
+    const t = e.results[0][0].transcript;
+    ideaInput.value = ideaInput.value.trim() ? `${ideaInput.value.trim()} ${t}` : t;
+  };
+  rec.onend = () => {
+    micBtn.dataset.rec = "";
+    micBtn.classList.remove("recording");
+    micBtn.textContent = "🎤";
+  };
+  rec.onerror = (e) => {
+    showToast("⚠️ 语音识别出错：" + e.error);
+    micBtn.dataset.rec = "";
+    micBtn.classList.remove("recording");
+    micBtn.textContent = "🎤";
+  };
+  rec.start();
+}
+
 /* ---------- 全随机 ---------- */
 function randomize() {
   ideaInput.value = "";
@@ -987,6 +1164,7 @@ initFields();
 updateDifficulty();
 updateWildness();
 renderHistory();
+loadShared();
 
 difficultySlider.oninput = updateDifficulty;
 wildnessSlider.oninput = updateWildness;
@@ -997,8 +1175,10 @@ clearHistoryBtn.onclick = () => {
   renderHistory();
   showToast("历史已清空");
 };
+micBtn.onclick = startVoiceInput;
 chatSendBtn.onclick = sendChat;
 chatInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !chatSendBtn.disabled) sendChat();
 });
 chatCloseBtn.onclick = () => { chatWrap.hidden = true; };
+historySearch.addEventListener("input", renderHistory);
