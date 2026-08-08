@@ -79,6 +79,19 @@
   <!-- 输出区 -->
   <div id="outputArea" hidden>
     <section class="card" id="resultCard"></section>
+
+    <!-- 打磨对话 -->
+    <section class="card" id="chatWrap" hidden>
+      <div class="row-between">
+        <label class="lbl" style="margin-bottom:0;">💬 和 AI 打磨方案</label>
+        <button class="link-btn" id="chatCloseBtn">收起</button>
+      </div>
+      <div id="chatMsgs" class="chat-msgs"></div>
+      <div class="chat-input-row">
+        <input id="chatInput" class="chat-input" type="text" placeholder="问 AI / 提出修改，Enter 发送…" autocomplete="off">
+        <button class="btn btn-sm btn-primary" id="chatSendBtn">发送</button>
+      </div>
+    </section>
   </div>
 
   <!-- 历史记录 -->

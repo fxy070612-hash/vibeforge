@@ -87,6 +87,11 @@ const generateBtn = $("generateBtn");
 const randomBtn = $("randomBtn");
 const outputArea = $("outputArea");
 const resultCard = $("resultCard");
+const chatWrap = $("chatWrap");
+const chatMsgs = $("chatMsgs");
+const chatInput = $("chatInput");
+const chatSendBtn = $("chatSendBtn");
+const chatCloseBtn = $("chatCloseBtn");
 const historyCard = $("historyCard");
 const historyList = $("historyList");
 const clearHistoryBtn = $("clearHistoryBtn");
@@ -149,15 +154,16 @@ function parseJsonFromText(text) {
 }
 
 /* ---------- API 调用（支持流式 / 非流式） ---------- */
-async function callChat(messages, { temperature = CONFIG.temperature, stream = false, onDelta = null } = {}) {
+async function callChat(messages, { temperature = CONFIG.temperature, stream = false, onDelta = null, json = true } = {}) {
   const body = {
     model: CONFIG.model,
     messages,
     temperature,
     max_tokens: CONFIG.maxTokens,
     stream,
-    response_format: { type: "json_object" }, // 强制合法 JSON，杜绝模型在字符串里塞换行
   };
+  // 需要结构化输出时强制 JSON 模式；聊天/追问是自由文本，关掉
+  if (json) body.response_format = { type: "json_object" };
 
   if (stream) {
     const resp = await fetch(CONFIG.apiUrl, {
@@ -416,6 +422,10 @@ function normalizeResult(text) {
 
 /* ---------- 渲染结果 ---------- */
 function renderResult(data) {
+  // 新方案 → 收起并重置打磨对话
+  chatWrap.hidden = true;
+  chatState = null;
+
   const wf = (data.workflow || [])
     .map((s) => `
       <div class="workflow-step">
@@ -462,6 +472,7 @@ function renderResult(data) {
       <button class="btn btn-sm btn-ghost" id="copyBtn">📋 复制工作流</button>
       <button class="btn btn-sm btn-ghost" id="exportBtn">⬇️ 导出 Markdown</button>
       <button class="btn btn-sm btn-ghost no-print" id="printBtn">🖨 打印 / PDF</button>
+      <button class="btn btn-sm btn-ghost no-print" id="chatBtn">💬 进一步打磨</button>
     </div>
     <div class="analysis-wrap" id="analysisWrap" hidden></div>`;
 
@@ -469,6 +480,7 @@ function renderResult(data) {
   $("copyBtn").onclick = () => copyMarkdown(data);
   $("exportBtn").onclick = () => exportMarkdown(data);
   $("printBtn").onclick = () => window.print();
+  $("chatBtn").onclick = () => openChat();
 }
 
 /* ---------- 创新性分析 ---------- */
@@ -620,6 +632,147 @@ function exportMarkdown(p) {
   showToast("⬇️ 已导出 Markdown");
 }
 
+/* ---------- 打磨对话 ---------- */
+let chatState = null; // 当前项目的对话上下文（重置时机：重新生成/采用新方案）
+
+function buildChatSystem(project) {
+  return `你是 VibeForge 的「方案打磨助手」。这是当前已生成的项目方案 JSON：
+${JSON.stringify({
+    project_name: project.project_name,
+    hook: project.hook,
+    description: project.description,
+    tech_stack: project.tech_stack,
+    difficulty_label: project.difficulty_label,
+    features: project.features,
+    workflow: project.workflow,
+  })}
+
+用户的每句话都是针对这个方案的修改要求或追问。
+
+规则：
+1. 先简短说改动思路（1-2 句）；【每次修改方案】都用 markdown 代码块 \`\`\`json … \`\`\` 输出一份【完整更新后】的项目 JSON，结构与上面完全一致；workflow 恰好 6 步（环境搭建、PRD 撰写、原型构建、核心功能迭代、调试优化、部署上线）。
+2. 如果只是回答提问/闲聊，不需要输出 JSON，正常回答即可。
+3. JSON 必须是完整版（不是只给改动部分），方便前端直接替换。`;
+}
+
+function seedChat() {
+  chatState = [{ role: "system", content: buildChatSystem(currentProject) }];
+  chatMsgs.innerHTML = "";
+  const tip = document.createElement("div");
+  tip.className = "chat-msg tip";
+  tip.textContent =
+    "👋 我在。可以：把难度降低 / 展开某一步成小任务 / 加个变现方式 / 换更简单的技术栈 / 让方案更具体… 改完的方案我会以 JSON 卡片给出，可一键采用。";
+  chatMsgs.appendChild(tip);
+}
+
+function openChat() {
+  if (!currentProject) return;
+  chatWrap.hidden = false;
+  if (!chatState) seedChat();
+  chatInput.focus();
+  chatWrap.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function addChatBubble(role, text) {
+  const b = document.createElement("div");
+  b.className = `chat-msg ${role}`;
+  b.textContent = text;
+  chatMsgs.appendChild(b);
+  chatMsgs.scrollTop = chatMsgs.scrollHeight;
+  return b;
+}
+
+/* 把回复渲染进气泡：```json 块变 <pre>，其余纯文本（安全） */
+function appendChatText(el, text) {
+  const parts = String(text).split(/```(?:json)?\s*/i);
+  parts.forEach((seg, i) => {
+    if (!seg) return;
+    if (i % 2 === 1) {
+      const pre = document.createElement("pre");
+      pre.textContent = seg.replace(/```/g, "").trim();
+      el.appendChild(pre);
+    } else {
+      el.appendChild(document.createTextNode(seg));
+    }
+  });
+}
+
+/* 从回复里抽出「完整方案 JSON」（必须是带 project_name/workflow 的） */
+function extractPlanJson(text) {
+  const obj = parseJsonFromText(text);
+  if (obj && (obj.project_name || obj.workflow)) return obj;
+  throw new Error("no plan");
+}
+
+async function sendChat() {
+  const q = chatInput.value.trim();
+  if (!q || !currentProject) return;
+  chatInput.value = "";
+  chatState.push({ role: "user", content: q });
+  addChatBubble("user", q);
+
+  chatSendBtn.disabled = true;
+  chatInput.disabled = true;
+
+  const bubble = document.createElement("div");
+  bubble.className = "chat-msg ai chat-typing";
+  chatMsgs.appendChild(bubble);
+  chatMsgs.scrollTop = chatMsgs.scrollHeight;
+
+  // 控制上下文长度：system + 最近 6 条（防超长）
+  const msgs = [chatState[0], ...chatState.slice(-6)];
+  let acc = "";
+  try {
+    await callChat(msgs, {
+      temperature: 0.7,
+      json: false,
+      stream: true,
+      onDelta: (d) => {
+        acc += d;
+        bubble.textContent = acc;
+        chatMsgs.scrollTop = chatMsgs.scrollHeight;
+      },
+    });
+  } catch (e) {
+    acc = `⚠️ 出错了：${e.message}`;
+  }
+
+  // 流式结束：重新渲染（美化代码块）
+  bubble.classList.remove("chat-typing");
+  bubble.textContent = "";
+  appendChatText(bubble, acc);
+
+  // 若回复带完整方案 → 提供「采用」
+  let plan = null;
+  try { plan = extractPlanJson(acc); } catch (e) { /* 正常对话无方案 */ }
+  if (plan) {
+    const btn = document.createElement("button");
+    btn.className = "btn btn-sm btn-violet chat-json-btn";
+    btn.textContent = "📌 采用这份方案";
+    btn.onclick = () => applyChatPlan(plan);
+    bubble.appendChild(btn);
+  }
+
+  chatState.push({ role: "assistant", content: acc });
+  chatSendBtn.disabled = false;
+  chatInput.disabled = false;
+  chatInput.focus();
+  chatMsgs.scrollTop = chatMsgs.scrollHeight;
+}
+
+function applyChatPlan(plan) {
+  try {
+    const normalized = normalizeResult(plan);
+    currentProject = normalized;
+    saveHistory(normalized);
+    renderResult(normalized); // renderResult 会重置并收起对话
+    showToast("✅ 已采用新方案");
+    resultCard.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (e) {
+    showToast("❌ 方案格式不对，未采用");
+  }
+}
+
 /* ---------- 全随机 ---------- */
 function randomize() {
   ideaInput.value = "";
@@ -663,3 +816,8 @@ clearHistoryBtn.onclick = () => {
   renderHistory();
   showToast("历史已清空");
 };
+chatSendBtn.onclick = sendChat;
+chatInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !chatSendBtn.disabled) sendChat();
+});
+chatCloseBtn.onclick = () => { chatWrap.hidden = true; };
