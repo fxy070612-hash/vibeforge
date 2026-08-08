@@ -363,6 +363,8 @@ async function generateProject() {
     currentProject = result;
     renderResult(result);
     saveHistory(result);
+    chatWrap.hidden = true; // 新项目 → 收起并重置打磨对话
+    chatState = null;
     resultCard.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (e) {
     resultCard.innerHTML = `<div class="error-msg">❌ 生成失败：${esc(e.message)}</div>`;
@@ -422,10 +424,6 @@ function normalizeResult(text) {
 
 /* ---------- 渲染结果 ---------- */
 function renderResult(data) {
-  // 新方案 → 收起并重置打磨对话
-  chatWrap.hidden = true;
-  chatState = null;
-
   const wf = (data.workflow || [])
     .map((s) => `
       <div class="workflow-step">
@@ -742,15 +740,16 @@ async function sendChat() {
   bubble.textContent = "";
   appendChatText(bubble, acc);
 
-  // 若回复带完整方案 → 提供「采用」
+  // 若回复带完整方案 → 自动同步到上方项目卡，对话继续
   let plan = null;
   try { plan = extractPlanJson(acc); } catch (e) { /* 正常对话无方案 */ }
   if (plan) {
-    const btn = document.createElement("button");
-    btn.className = "btn btn-sm btn-violet chat-json-btn";
-    btn.textContent = "📌 采用这份方案";
-    btn.onclick = () => applyChatPlan(plan);
-    bubble.appendChild(btn);
+    if (tryApplyPlan(plan, true)) {
+      const note = document.createElement("div");
+      note.className = "chat-sync-note";
+      note.textContent = "✅ 新方案已同步到上方项目卡";
+      bubble.appendChild(note);
+    }
   }
 
   chatState.push({ role: "assistant", content: acc });
@@ -760,16 +759,23 @@ async function sendChat() {
   chatMsgs.scrollTop = chatMsgs.scrollHeight;
 }
 
-function applyChatPlan(plan) {
+/* 应用方案：更新上方项目卡；keepChat=true 保留对话并刷新上下文（可继续打磨） */
+function tryApplyPlan(plan, keepChat = false) {
   try {
     const normalized = normalizeResult(plan);
     currentProject = normalized;
     saveHistory(normalized);
-    renderResult(normalized); // renderResult 会重置并收起对话
-    showToast("✅ 已采用新方案");
-    resultCard.scrollIntoView({ behavior: "smooth", block: "start" });
+    renderResult(normalized);
+    if (chatState && chatState.length) {
+      chatState[0] = { role: "system", content: buildChatSystem(normalized) };
+    }
+    if (!keepChat) {
+      chatWrap.hidden = true;
+      chatState = null;
+    }
+    return true;
   } catch (e) {
-    showToast("❌ 方案格式不对，未采用");
+    return false;
   }
 }
 
