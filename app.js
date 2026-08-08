@@ -401,7 +401,9 @@ function showStreamHint() {
 }
 
 function normalizeResult(text) {
-  const r = parseJsonFromText(text);
+  // 兼容字符串（AI 原文）和对象（打磨对话已解析的 plan）
+  const r = typeof text === "string" ? parseJsonFromText(text) : text;
+  if (!r || typeof r !== "object") throw new Error("方案数据为空");
   if (!r.project_name && !r.workflow) throw new Error("返回缺少 project_name / workflow 字段");
   r.project_name = r.project_name || "未命名项目";
   r.description = r.description || "";
@@ -748,6 +750,12 @@ async function sendChat() {
       const note = document.createElement("div");
       note.className = "chat-sync-note";
       note.textContent = "✅ 新方案已同步到上方项目卡";
+      bubble.appendChild(note);
+    } else {
+      const note = document.createElement("div");
+      note.className = "chat-sync-note";
+      note.style.color = "#b91c1c";
+      note.textContent = "⚠️ 方案缺少必要字段，未同步";
       bubble.appendChild(note);
     }
   }
