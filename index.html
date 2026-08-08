@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VibeForge · AI 项目工坊</title>
+<meta name="description" content="描述想法 · 选领域 · 调难度 —— DeepSeek 帮你生成可落地的 Vibe Coding 项目 + 创新性打分">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+
+  <!-- 头部 -->
+  <header class="hero">
+    <h1 class="logo">VibeForge</h1>
+    <p class="sub">描述想法 · 选领域 · 调难度 —— AI 生成项目 + 创新性打分</p>
+  </header>
+
+  <!-- 输入区 -->
+  <section class="card">
+    <label class="lbl">💡 一句话描述（选填，留空让 AI 自由发挥）</label>
+    <textarea id="ideaInput" placeholder="例如：做一个用 AI 识别宠物情绪的小工具……"></textarea>
+    <div class="quick-samples">
+      <span class="qs-label">试试：</span>
+      <button class="qs-chip" data-idea="用摄像头识别小猫在闹哪样情绪">🐱 宠物情绪识别</button>
+      <button class="qs-chip" data-idea="帮我背完 CET-6 的 3000 个单词">📖 六级背单词</button>
+      <button class="qs-chip" data-idea="给写作业分心的我做个番茄钟但带点 AI 花样">🍅 AI 番茄钟</button>
+      <button class="qs-chip" data-idea="做个能陪我玩井字棋还嘴欠的小网页游戏">🤖 嘴欠井字棋</button>
+    </div>
+  </section>
+
+  <!-- 领域 -->
+  <section class="card">
+    <label class="lbl">📂 选择领域（可多选）</label>
+    <div class="fields-grid" id="fieldsContainer"></div>
+  </section>
+
+  <!-- 难度 -->
+  <section class="card">
+    <div class="row-between">
+      <label class="lbl">📊 难度等级</label>
+      <span id="difficultyDisplay" class="lv-pill">Lv.5 · 中等</span>
+    </div>
+    <div class="slider-wrapper">
+      <span>🌱</span>
+      <input type="range" id="difficultySlider" min="1" max="10" value="5">
+      <span>🚀</span>
+    </div>
+    <div class="slider-scale"><span>1 入门</span><span>10 硬核</span></div>
+  </section>
+
+  <!-- 按钮 -->
+  <div class="actions">
+    <button class="btn btn-primary" id="generateBtn">✨ 生成推荐</button>
+    <button class="btn btn-ghost" id="randomBtn">🎲 全随机</button>
+  </div>
+
+  <!-- 输出区 -->
+  <div id="outputArea" hidden>
+    <section class="card" id="resultCard"></section>
+  </div>
+
+  <!-- 历史记录 -->
+  <section class="card" id="historyCard" hidden>
+    <div class="row-between">
+      <label class="lbl">🕘 最近生成</label>
+      <button class="link-btn" id="clearHistoryBtn">清空</button>
+    </div>
+    <div id="historyList" class="history-list"></div>
+  </section>
+
+  <footer class="foot">
+    由 DeepSeek 驱动 · Key 藏在本地代理 / Cloudflare Worker 里，前端安全
+  </footer>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
