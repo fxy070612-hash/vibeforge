@@ -10,8 +10,8 @@
 const CONFIG = {
   apiUrl: "http://127.0.0.1:11436/v1/chat/completions", // 本地代理 / Cloudflare Worker
   model: "deepseek-chat",          // DeepSeek 模型
-  temperature: 0.7,                // 生成推荐时的温度（创意度）
-  maxTokens: 1600,                 // 单次输出上限
+  temperature: 0.85,               // 生成推荐时的温度（越高越敢创新）
+  maxTokens: 3000,                 // 单次输出上限（要足够撑起详细工作流）
   stream: true,                    // 生成推荐时流式输出（分析固定非流式）
   historyLimit: 10,                // 本地历史记录条数
 };

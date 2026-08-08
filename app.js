@@ -8,19 +8,30 @@
  * ============================================================ */
 
 /* ---------- 提示词（核心资产） ---------- */
-const SYSTEM_PROMPT = `你是一位资深的 Vibe Coding 导师，擅长把想法变成能动手做出来的项目。
-用户会提供：想法、领域、难度（1-10，越大越难）。请推荐一个具体、当下流行、可落地的 Vibe Coding 项目，并给出从 0 到 1 的完整工作流。
+const SYSTEM_PROMPT = `你是一位疯狂的 Vibe Coding 导师。用户会提供：想法、领域（可能很具体）、难度（1-10，越大越难）。
+
+你的使命：推荐一个【具体、反套路、让人看完立刻想动手】的项目。宁可怪，不要平庸。
+
+创作铁律：
+1. 绝对禁止烂大街项目：待办清单、番茄钟、记账本、博客、天气应用、随机数工具、纯增删改查、仿某官网。除非你给它们一个真正让人拍大腿的 twist。
+2. 每个项目必须有一个"记忆点 hook"：反常识设定 / 反差玩法 / 出人意料的组合 / 极客梗 / 有传播力的细节。让人一眼觉得"这个有意思，我要开做"。
+3. 必须 2-3 天内能用 Vibe Coding 落地：纯前端 + 免费 API 优先，别推荐需要烧钱服务器的项目。
+4. 参考真实存在的爆款小项目的"具体感"，但不要照抄。
 
 输出要求（必须严格遵守）：
 1. 只返回一个 JSON 对象。不要任何解释、不要用 markdown 代码块包裹。
 2. JSON 结构如下：
 {
-  "project_name": "项目名称（简洁、响亮、中文）",
-  "description": "一句话简介（100 字内）",
-  "tech_stack": "推荐技术栈（尽量免费/开源，如 HTML/CSS/JS + DeepSeek API）",
-  "difficulty_label": "难度描述（入门/简单/中等/进阶/困难 之一）",
+  "project_name": "响亮的名字，最好带梗或反差（中文）",
+  "hook": "一句话记忆点：为什么有意思/为什么能火（30字内，越具体越好）",
+  "description": "120字内简介：是什么 + 好玩在哪",
+  "tech_stack": "具体技术栈（含具体库/API 名称，纯前端+免费 API 优先）",
+  "difficulty_label": "入门/简单/中等/进阶/困难 之一",
+  "features": [
+    {"name": "核心功能名", "detail": "该功能独特的细节：做到什么效果、用户会有什么体验"}
+  ],
   "workflow": [
-    {"step": 1, "title": "环境搭建", "content": "具体到命令、文件名的操作指引"},
+    {"step": 1, "title": "环境搭建", "content": "…"},
     {"step": 2, "title": "PRD 撰写", "content": "…"},
     {"step": 3, "title": "原型构建", "content": "…"},
     {"step": 4, "title": "核心功能迭代", "content": "…"},
@@ -28,9 +39,10 @@ const SYSTEM_PROMPT = `你是一位资深的 Vibe Coding 导师，擅长把想�
     {"step": 6, "title": "部署上线", "content": "…"}
   ]
 }
-3. workflow 恰好 6 步，顺序必须覆盖：环境搭建、PRD 撰写、原型构建、核心功能迭代、调试优化、部署上线。
-   每步 content 要具体可执行：包含关键命令、文件名、技术选型、验收点。
-4. difficulty_label 与难度数值匹配：1-3 入门，4-6 中等，7-8 进阶，9-10 困难。`;
+3. features 给 3-5 个，每个都要有一个具体、好玩的细节（不是"支持上传""响应式布局"这种废话）。
+4. workflow 恰好 6 步，顺序固定：环境搭建、PRD 撰写、原型构建、核心功能迭代、调试优化、部署上线。
+   每步 content 必须具体到能直接照做：用什么工具、敲什么命令、建什么文件、怎么用 AI 写这段、做完怎么验收。每步 60-150 字。
+5. difficulty_label 与难度匹配：1-3 入门，4-6 中等，7-8 进阶，9-10 困难（越难功能越复杂、技术越深）。`;
 
 const ANALYSIS_PROMPT = `你是产品创新顾问。用户给出一个项目，请判断市场上是否已有类似产品，并从 5 个维度打分（每个 1-10 分）：
 novelty 独特性、demand 市场需求、feasibility 技术可行性、competition 替代品稀缺度、impact 潜在影响力。
@@ -354,6 +366,12 @@ function normalizeResult(text) {
   r.description = r.description || "";
   r.tech_stack = r.tech_stack || "";
   r.difficulty_label = r.difficulty_label || "";
+  r.hook = r.hook || "";
+  if (!Array.isArray(r.features)) r.features = [];
+  r.features = r.features.map((f) => ({
+    name: (f && f.name) || "",
+    detail: (f && f.detail) || "",
+  })).filter((f) => f.name);
   if (!Array.isArray(r.workflow)) r.workflow = [];
   r.workflow = r.workflow.map((s, i) => ({
     step: s.step || i + 1,
@@ -376,6 +394,21 @@ function renderResult(data) {
       </div>`)
     .join("");
 
+  const hookHtml = data.hook
+    ? `<div class="hook-box">💡 <b>记忆点：</b>${esc(data.hook)}</div>`
+    : "";
+  const featHtml = data.features.length
+    ? `
+      <div class="workflow-title">⚡ 核心亮点</div>
+      <div class="features-grid">
+        ${data.features.map((f) => `
+          <div class="feature-item">
+            <div class="feature-name">${esc(f.name)}</div>
+            <div class="feature-detail">${esc(f.detail)}</div>
+          </div>`).join("")}
+      </div>`
+    : "";
+
   resultCard.innerHTML = `
     <div class="result-head">
       <div>
@@ -386,7 +419,9 @@ function renderResult(data) {
         </div>
       </div>
     </div>
+    ${hookHtml}
     <p class="project-desc">${esc(data.description)}</p>
+    ${featHtml}
     <div class="workflow-title">📋 Vibe Coding 工作流</div>
     <div class="workflow-box">${wf}</div>
     <div class="result-actions">
@@ -416,7 +451,7 @@ async function analyzeProject(project) {
 
   const messages = [
     { role: "system", content: ANALYSIS_PROMPT },
-    { role: "user", content: `项目名称：${project.project_name}\n描述：${project.description}\n技术栈：${project.tech_stack}` },
+    { role: "user", content: `项目名称：${project.project_name}\n记忆点：${project.hook || "无"}\n描述：${project.description}\n技术栈：${project.tech_stack}` },
   ];
 
   try {
@@ -511,15 +546,16 @@ function renderHistory() {
 
 /* ---------- 复制 / 导出 ---------- */
 function buildMarkdown(p) {
+  const feat = (p.features || []).map((f) => `- **${f.name}**：${f.detail}`).join("\n");
   const wf = (p.workflow || []).map((s) => `${s.step}. **${s.title}** — ${s.content}`).join("\n");
   return `# ${p.project_name}
 
-> ${p.description}
+${p.hook ? `> 💡 **记忆点：** ${p.hook}\n` : ""}> ${p.description}
 
 **技术栈：** ${p.tech_stack}
 **难度：** ${p.difficulty_label}
 
-## Vibe Coding 工作流
+${feat ? `## ⚡ 核心亮点\n${feat}\n` : ""}## Vibe Coding 工作流
 ${wf}`;
 }
 

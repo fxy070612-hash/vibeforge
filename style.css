@@ -178,6 +178,31 @@ input[type="range"] {
 .project-desc { color: #334155; margin-bottom: 16px; }
 
 .workflow-title { font-weight: 700; margin-bottom: 8px; }
+
+/* 记忆点 & 核心亮点 */
+.hook-box {
+  background: linear-gradient(135deg, #eef2ff, #faf5ff);
+  border: 1px solid #ddd6fe;
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  font-size: 0.9rem;
+}
+.hook-box b { color: #7c3aed; }
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  margin: 12px 0 16px;
+}
+.feature-item {
+  background: #fafbfd;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.feature-name { font-weight: 600; font-size: 0.9rem; color: #4338ca; }
+.feature-detail { color: #475569; font-size: 0.85rem; margin-top: 2px; }
 .workflow-box { background: #f8fafc; border-radius: 16px; padding: 6px 16px; border: 1px solid var(--line); }
 .workflow-step { display: flex; gap: 14px; padding: 12px 0; border-bottom: 1px dashed #e2e8f0; }
 .workflow-step:last-child { border-bottom: none; }
