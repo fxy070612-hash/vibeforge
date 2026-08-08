@@ -96,6 +96,34 @@ textarea:focus { outline: none; border-color: var(--indigo); }
   font-weight: 600;
 }
 
+/* 领域 · 分组选择器 */
+.field-top { gap: 10px; }
+.field-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.field-search {
+  border: 1.5px solid var(--line);
+  border-radius: 40px;
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  width: 170px;
+  background: #fff;
+  transition: border-color 0.15s, width 0.15s;
+}
+.field-search:focus { outline: none; border-color: var(--indigo); width: 230px; }
+.field-search::-webkit-search-cancel-button { cursor: pointer; }
+.field-count { font-size: 0.8rem; color: var(--muted); margin: 8px 0 12px; }
+.fields-body { display: flex; flex-direction: column; gap: 10px; }
+.field-group {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px 14px;
+  background: #fafbfd;
+}
+.field-group-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; }
+.field-group-title { font-weight: 600; font-size: 0.85rem; color: #334155; white-space: nowrap; }
+.field-group-actions { display: flex; gap: 10px; flex-shrink: 0; }
+.field-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+
 /* 滑块 */
 .row-between { display: flex; justify-content: space-between; align-items: center; }
 .lv-pill {

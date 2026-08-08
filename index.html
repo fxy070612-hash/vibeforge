@@ -31,8 +31,15 @@
 
   <!-- 领域 -->
   <section class="card">
-    <label class="lbl">📂 选择领域（可多选）</label>
-    <div class="fields-grid" id="fieldsContainer"></div>
+    <div class="row-between field-top">
+      <label class="lbl" style="margin-bottom:0;">📂 选择领域</label>
+      <div class="field-toolbar">
+        <input type="search" id="fieldSearch" class="field-search" placeholder="🔍 搜索领域…">
+        <button class="link-btn" id="clearFieldsBtn">清空</button>
+      </div>
+    </div>
+    <div id="fieldCount" class="field-count">已选 0 项 · 默认全领域</div>
+    <div id="fieldsBody" class="fields-body"></div>
   </section>
 
   <!-- 难度 -->
@@ -77,6 +84,7 @@
 <div id="toast" class="toast" hidden></div>
 
 <script src="config.js"></script>
+<script src="fields.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

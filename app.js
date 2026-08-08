@@ -48,7 +48,7 @@ novelty 独特性、demand 市场需求、feasibility 技术可行性、competit
 4. existing_projects 列 1-3 个真实存在的类似产品；若确实没有，返回空数组 []。`;
 
 /* ---------- 领域 & 常量 ---------- */
-const FIELDS = ["AI 应用", "效率工具", "游戏开发", "自动化脚本", "创意艺术", "数据可视化", "社交/社区", "物联网"];
+/* 领域数据在 fields.js：FIELD_CATEGORIES（15 类 × 120 个）/ ALL_FIELDS */
 const LEVEL_LABEL = ["", "入门", "入门", "入门", "中等", "中等", "中等", "进阶", "进阶", "困难", "困难"];
 const SCORE_MAP = [
   ["novelty", "独特性"],
@@ -61,7 +61,10 @@ const HISTORY_KEY = "vibeforge_history_v1";
 
 /* ---------- DOM ---------- */
 const $ = (id) => document.getElementById(id);
-const fieldsContainer = $("fieldsContainer");
+const fieldsBody = $("fieldsBody");
+const fieldSearch = $("fieldSearch");
+const fieldCount = $("fieldCount");
+const clearFieldsBtn = $("clearFieldsBtn");
 const ideaInput = $("ideaInput");
 const difficultySlider = $("difficultySlider");
 const difficultyDisplay = $("difficultyDisplay");
@@ -187,16 +190,84 @@ let currentProject = null;
 
 /* ---------- 初始化 UI ---------- */
 function initFields() {
-  FIELDS.forEach((f) => {
-    const tag = document.createElement("span");
-    tag.className = "field-tag";
-    tag.textContent = f;
-    tag.dataset.value = f;
-    tag.onclick = () => {
-      tag.classList.toggle("active");
-      selectedFields = Array.from(document.querySelectorAll(".field-tag.active")).map((el) => el.dataset.value);
-    };
-    fieldsContainer.appendChild(tag);
+  fieldsBody.innerHTML = "";
+  FIELD_CATEGORIES.forEach((cat) => {
+    const group = document.createElement("div");
+    group.className = "field-group";
+    group.dataset.name = cat.name;
+
+    const head = document.createElement("div");
+    head.className = "field-group-head";
+    const title = document.createElement("span");
+    title.className = "field-group-title";
+    title.textContent = cat.name;
+    const actions = document.createElement("span");
+    actions.className = "field-group-actions";
+    const selAll = document.createElement("button");
+    selAll.className = "link-btn";
+    selAll.textContent = "全选";
+    const clr = document.createElement("button");
+    clr.className = "link-btn";
+    clr.textContent = "清空";
+    actions.append(selAll, clr);
+    head.append(title, actions);
+
+    const chips = document.createElement("div");
+    chips.className = "field-chips";
+    cat.items.forEach((name) => {
+      const tag = document.createElement("span");
+      tag.className = "field-tag";
+      tag.textContent = name;
+      tag.dataset.field = name;
+      tag.dataset.group = cat.name;
+      tag.onclick = () => { tag.classList.toggle("active"); syncSelected(); };
+      chips.appendChild(tag);
+    });
+
+    selAll.onclick = () => setGroup(cat.name, true);
+    clr.onclick = () => setGroup(cat.name, false);
+
+    group.append(head, chips);
+    fieldsBody.appendChild(group);
+  });
+
+  fieldSearch.addEventListener("input", searchFields);
+  clearFieldsBtn.onclick = clearAllFields;
+  updateFieldCount();
+}
+
+/* ---------- 领域选择辅助 ---------- */
+function syncSelected() {
+  selectedFields = Array.from(document.querySelectorAll(".field-tag.active")).map((el) => el.dataset.field);
+  updateFieldCount();
+}
+
+function setGroup(catName, on) {
+  document.querySelectorAll(`.field-tag[data-group="${catName}"]`).forEach((el) => el.classList.toggle("active", on));
+  syncSelected();
+}
+
+function clearAllFields() {
+  document.querySelectorAll(".field-tag.active").forEach((el) => el.classList.remove("active"));
+  syncSelected();
+}
+
+function updateFieldCount() {
+  fieldCount.textContent = selectedFields.length
+    ? `已选 ${selectedFields.length} 项（${selectedFields.length} / ${ALL_FIELDS.length}）`
+    : "已选 0 项 · 默认全领域";
+}
+
+function searchFields() {
+  const q = fieldSearch.value.trim().toLowerCase();
+  document.querySelectorAll(".field-group").forEach((group) => {
+    let visible = 0;
+    group.querySelectorAll(".field-tag").forEach((tag) => {
+      const hit = !q || tag.textContent.toLowerCase().includes(q);
+      tag.style.display = hit ? "" : "none";
+      if (hit) visible++;
+    });
+    group.style.display = visible ? "" : "none";
   });
 }
 
@@ -484,13 +555,14 @@ function exportMarkdown(p) {
 function randomize() {
   ideaInput.value = "";
   document.querySelectorAll(".field-tag").forEach((el) => el.classList.remove("active"));
-  const shuffled = [...FIELDS].sort(() => 0.5 - Math.random());
+  const shuffled = [...ALL_FIELDS].sort(() => 0.5 - Math.random());
   const count = Math.floor(Math.random() * 3) + 1;
   const picked = shuffled.slice(0, count);
   document.querySelectorAll(".field-tag").forEach((el) => {
-    if (picked.includes(el.dataset.value)) el.classList.add("active");
+    if (picked.includes(el.dataset.field)) el.classList.add("active");
   });
   selectedFields = picked;
+  updateFieldCount();
   const lv = Math.floor(Math.random() * 10) + 1;
   difficultySlider.value = lv;
   updateDifficulty();
